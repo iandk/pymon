@@ -1,6 +1,6 @@
 # pymon
 
-The Monitoring Script is a Python-based script that allows you to monitor the status of servers and services. It supports various monitoring types such as ping, port check, HTTP(s) check, and keyword check. You can easily configure the script to monitor your desired servers and receive notifications via Telegram.
+A Python-based script that allows you to monitor the status of servers and services. It supports various monitoring types such as ping, port check, HTTP(s) check, and keyword check. You can easily configure the script to monitor your desired servers and receive notifications via Telegram.
 
 ## Supported Monitoring Types
 
