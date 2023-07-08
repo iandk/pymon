@@ -1,0 +1,12 @@
+[Unit]
+Description=A simple monitoring script written in python
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/opt/pymon
+ExecStart=/opt/pymon/myvenv/bin/python3 main.py --silent
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
