@@ -1,0 +1,5 @@
+{
+  "bot_token": "<INSERT_BOT_TOKEN_HERE>",
+  "chat_id": "<INSERT_CHAT_ID_HERE>",
+  "threshold": 2
+}
