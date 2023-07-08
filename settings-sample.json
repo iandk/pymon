@@ -1,6 +1,9 @@
 {
   "bot_token": "<INSERT_BOT_TOKEN_HERE>",
   "chat_id": "<INSERT_CHAT_ID_HERE>",
-  "failure_threshold": 1,
-  "check_interval": 5
+  "failure_threshold": 2,
+  "check_interval_seconds": 20,
+  "status_report_interval_minutes": 1440,
+  "report_only_on_down": false
+
 }

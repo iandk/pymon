@@ -10,6 +10,23 @@ previous_status = {}
 downtime_start = {}
 fail_count = {}
 
+def generate_status_report():
+    down_servers = [server for server, status in previous_status.items() if status == "Down"]
+    up_servers = [server for server, status in previous_status.items() if status == "Up"]
+
+    if down_servers:
+        report = "🔴 Status Report - Servers Down:\n"
+        for server in down_servers:
+            report += f"- {server}\n"
+    else:
+        report = "✅ Status Report - All Servers Up\n"
+
+    if up_servers:
+        report += "\nServers Up:\n"
+        for server in up_servers:
+            report += f"- {server}\n"
+
+    return report
 
 # Function to check a single server
 def check_server(description, type_, target, port=None, keyword=None, expect_keyword=None, failure_threshold=None, silent=False):
@@ -17,7 +34,7 @@ def check_server(description, type_, target, port=None, keyword=None, expect_key
     if settings is None:
         return
 
-    bot_token, chat_id, _, _ = settings
+    bot_token, chat_id, _, _, _, _ = settings
     if bot_token is None or chat_id is None:
         return
 
@@ -55,11 +72,11 @@ def check_server(description, type_, target, port=None, keyword=None, expect_key
             downtime_start[description] = datetime.datetime.now()
     else:
         fail_count[description] = 0  # Reset failure count on success
+        previous_status[description] = "Up"  # Store the status of the server
         if previous_status.get(description) == "Down":
             downtime = datetime.datetime.now() - downtime_start[description]
             downtime_formatted = format_timedelta(downtime)
             asyncio.run(send_telegram_message(f"✅ {description} is back up. Downtime: {downtime_formatted}", chat_id, bot_token))
-            previous_status[description] = "Up"
 
     if not silent:
         if status == "Up":
@@ -68,17 +85,22 @@ def check_server(description, type_, target, port=None, keyword=None, expect_key
             reason = f" {error}" if error is not None else ""
             print(f"{description: <30} \033[0;31m{status}\033[0m{reason}")  # Print in red if Down
 
+
+
 # Function to monitor servers continuously
 def monitor_servers(silent=False):
     settings = read_settings()
     if settings is None:
         return
 
-    bot_token, chat_id, failure_threshold, check_interval = settings
-    if bot_token is None or chat_id is None or failure_threshold is None or check_interval is None:
+    bot_token, chat_id, failure_threshold, check_interval_seconds, status_report_interval_minutes, report_only_if_down = settings
+    if bot_token is None or chat_id is None or failure_threshold is None or check_interval_seconds is None:
         return
 
-    check_interval = int(check_interval)
+    check_interval_seconds = int(check_interval_seconds)
+    status_report_interval_seconds = int(status_report_interval_minutes) * 60
+    last_status_report_time = time.time()
+
     first_run = True
     all_servers_up = True
     while True:
@@ -100,4 +122,12 @@ def monitor_servers(silent=False):
         else:
             print("Configuration file not found: servers.json")
 
-        time.sleep(check_interval)  # Wait for the specified sleep time before rechecking
+        # Send status report at specified interval
+        current_time = time.time()
+        if current_time - last_status_report_time >= status_report_interval_seconds:
+            report = generate_status_report()
+            if not report_only_if_down or "Down" in report:
+                asyncio.run(send_telegram_message(report, chat_id, bot_token))
+            last_status_report_time = current_time
+
+        time.sleep(check_interval_seconds)  # Wait for the specified sleep time before rechecking

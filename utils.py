@@ -15,10 +15,12 @@ def read_settings():
             chat_id = settings.get("chat_id")
             check_interval = settings.get("check_interval", 20)
             failure_threshold = settings.get("failure_threshold", 2)  
-            return bot_token, chat_id, failure_threshold, check_interval
+            status_report_interval_minutes = settings.get("status_report_interval_minutes", 60)
+            report_only_on_down = settings.get("report_only_on_down", False)
+            return bot_token, chat_id, failure_threshold, check_interval, status_report_interval_minutes, report_only_on_down
     else:
         print("Settings file not found: settings.json")
-    return None, None, None, None
+    return None, None, None, None, None, None
 
 
 # Function to send a message via Telegram

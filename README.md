@@ -49,10 +49,10 @@ cd /opt/pymon/ && myvenv/bin/python3 main.py
 
 
 ## Configuration options
-To monitor your desired servers and services, configure the servers.json file with the following options:
+The monitoring script utilizes two configuration files: servers.json to specify monitoring targets such as descriptions, types, and targets, and settings.json to configure application behavior including bot token, chat ID, intervals, and notification preferences
 
-
-Server Configuration Options:
+### Monitoring targets:
+`servers.json`
 
 - `description`: A brief description of the server or service being monitored.
 
@@ -69,6 +69,23 @@ Server Configuration Options:
 - `keyword` (only for `keyword` type): The keyword to search for in the response content.
 
 - `expect_keyword` (only for `keyword` type): Set to `true` if the keyword should be present, or `false` if it should be absent.
+
+### Application settings:
+`settings.json` 
+
+- `bot_token`: The token of your Telegram bot. You can obtain this token by creating a bot using the BotFather bot on Telegram.
+
+- `chat_id`: The chat ID where you want to receive the monitoring notifications. You can find the chat ID by sending a message to your bot and then accessing the following URL: `https://api.telegram.org/bot<bot_token>/getUpdates`.
+
+- `failure_threshold`: The number of consecutive failures before considering a server as "Down".
+
+- `check_interval_seconds`: The interval, in seconds, between each server check.
+
+- `status_report_interval_minutes`: The interval, in minutes, between each status report. The script will send a status report message at this interval, indicating the overall status of all monitored servers.
+
+- `report_only_on_down`: Set this value to `true` if you want to receive status report messages only when a server is "Down". Set it to `false` if you want to receive status report messages regardless of the server status.
+
+
 
 Example configuration
 ```json
