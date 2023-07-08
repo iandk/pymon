@@ -10,6 +10,11 @@ The Monitoring Script is a Python-based script that allows you to monitor the st
 4. Keyword Check: Verifies if a specific keyword is present or absent in the response content of an HTTP(s) request.
 
 ## Installation
+You have two options for running the script: running it in the background, which will automatically monitor for status changes, or running it in the terminal with a graphical output.
+
+###  Background Service 
+To run the script as a background service, follow the steps below:
+
 
 1. Clone the repository to your local machine:
 
@@ -33,6 +38,13 @@ nano /opt/pymon/servers.json
 ```shell
 systemctl start pymon
 systemctl status pymon
+```
+
+### Terminal View
+To run the script in the terminal with a graphical output, use the following command:
+> **Note:** The terminal view should only be used if the system service is stopped. Running both the service and terminal view simultaneously may cause conflicts.
+```shell
+cd /opt/pymon/ && myvenv/bin/python3 main.py
 ```
 
 
