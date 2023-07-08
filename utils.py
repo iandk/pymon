@@ -4,6 +4,7 @@ import requests
 import json
 import certifi
 from requests.exceptions import SSLError
+from telegram import Bot
 
 # Function to read bot_token, chat_id, and threshold from settings file
 def read_settings():
@@ -12,11 +13,21 @@ def read_settings():
             settings = json.load(json_file)
             bot_token = settings.get("bot_token")
             chat_id = settings.get("chat_id")
-            threshold = settings.get("threshold", 2)
-            return bot_token, chat_id, threshold
+            check_interval = settings.get("check_interval", 20)
+            failure_threshold = settings.get("failure_threshold", 2)  
+            return bot_token, chat_id, failure_threshold, check_interval
     else:
         print("Settings file not found: settings.json")
-    return None, None, None
+    return None, None, None, None
+
+
+# Function to send a message via Telegram
+async def send_telegram_message(message, chat_id, bot_token):
+    try:
+        bot = Bot(token=bot_token)
+        await bot.send_message(chat_id=chat_id, text=message)
+    except Exception as e:
+        print(f"Failed to send Telegram message: {e}")
 
 
 def format_timedelta(delta):

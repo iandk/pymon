@@ -1,5 +1,6 @@
 {
   "bot_token": "<INSERT_BOT_TOKEN_HERE>",
   "chat_id": "<INSERT_CHAT_ID_HERE>",
-  "threshold": 2
+  "failure_threshold": 1,
+  "check_interval": 5
 }
