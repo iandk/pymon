@@ -1,25 +1,20 @@
 {
   "servers": [
     {
-      "description": "Cloudflare",
+      "description": "1.1.1.1",
       "type": "ping",
       "target": "1.1.1.1"
     },
     {
-      "description": "Demosite response 200",
+      "description": "v6Node.com",
       "type": "http",
-      "target": "https://httpstat.us/200"
+      "target": "https://v6node.com"
     },
     {
-      "description": "Demosite response 404",
-      "type": "http",
-      "target": "https://httpstat.us/404"
-    },
-    {
-      "description": "Google DNS",
+      "description": "Google",
       "type": "port",
-      "target": "8.8.8.8",
-      "port": 53
+      "target": "google.com",
+      "port": 80
     },
     {
       "description": "v6Node Keyword check",
