@@ -72,8 +72,9 @@ def check_server(description, type_, target, port=None, keyword=None, expect_key
             downtime_start[description] = datetime.datetime.now()
     else:
         fail_count[description] = 0  # Reset failure count on success
+        was_down = previous_status.get(description) == "Down"
         previous_status[description] = "Up"  # Store the status of the server
-        if previous_status.get(description) == "Down":
+        if was_down:
             downtime = datetime.datetime.now() - downtime_start[description]
             downtime_formatted = format_timedelta(downtime)
             asyncio.run(send_telegram_message(f"✅ {description} is back up. Downtime: {downtime_formatted}", chat_id, bot_token))
@@ -84,8 +85,6 @@ def check_server(description, type_, target, port=None, keyword=None, expect_key
         else:
             reason = f" {error}" if error is not None else ""
             print(f"{description: <30} \033[0;31m{status}\033[0m{reason}")  # Print in red if Down
-
-
 
 # Function to monitor servers continuously
 def monitor_servers(silent=False):
