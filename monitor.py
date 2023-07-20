@@ -101,7 +101,6 @@ def monitor_servers(silent=False):
     last_status_report_time = time.time()
 
     first_run = True
-    all_servers_up = True
     while True:
         if not silent:
             print("\033c", end="")  # Clear terminal output
@@ -112,12 +111,11 @@ def monitor_servers(silent=False):
                 servers = json.load(json_file).get('servers', [])
             for server in servers:
                 check_server(server['description'], server['type'], server['target'], server.get('port'), server.get('keyword'), server.get('expect_keyword'), failure_threshold, silent)
-                if first_run and previous_status.get(server['description']) == "Down":
-                    all_servers_up = False
+                
             if first_run:
                 first_run = False
-                if all_servers_up:
-                    asyncio.run(send_telegram_message("✅ All servers are reachable", chat_id, bot_token))
+                report = generate_status_report()
+                asyncio.run(send_telegram_message(report, chat_id, bot_token))
         else:
             print("Configuration file not found: servers.json")
 
@@ -130,3 +128,6 @@ def monitor_servers(silent=False):
             last_status_report_time = current_time
 
         time.sleep(check_interval_seconds)  # Wait for the specified sleep time before rechecking
+
+if __name__ == "__main__":
+    monitor_servers()
