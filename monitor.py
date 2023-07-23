@@ -106,6 +106,52 @@ def monitor_servers(silent=False):
             print("\033c", end="")  # Clear terminal output
         if not silent:
             print("\033[0;36mMonitoring servers...\033[0m")
+        try:
+            if os.path.exists("servers.json"):
+                with open("servers.json") as json_file:
+                    servers = json.load(json_file).get('servers', [])
+                for server in servers:
+                    check_server(server['description'], server['type'], server['target'], server.get('port'), server.get('keyword'), server.get('expect_keyword'), failure_threshold, silent)
+
+                if first_run:
+                    first_run = False
+                    report = generate_status_report()
+                    asyncio.run(send_telegram_message(report, chat_id, bot_token))
+            else:
+                print("Configuration file not found: servers.json")
+        except json.JSONDecodeError:
+            error_message = "Error in servers.json: Invalid JSON syntax"
+            print(error_message)
+            asyncio.run(send_telegram_message(error_message, chat_id, bot_token))
+            break
+
+        # Send status report at specified interval
+        current_time = time.time()
+        if current_time - last_status_report_time >= status_report_interval_seconds:
+            report = generate_status_report()
+            if not report_only_if_down or "Down" in report:
+                asyncio.run(send_telegram_message(report, chat_id, bot_token))
+            last_status_report_time = current_time
+
+        time.sleep(check_interval_seconds)  # Wait for the specified sleep time before rechecking
+    settings = read_settings()
+    if settings is None:
+        return
+
+    bot_token, chat_id, failure_threshold, check_interval_seconds, status_report_interval_minutes, report_only_if_down = settings
+    if bot_token is None or chat_id is None or failure_threshold is None or check_interval_seconds is None:
+        return
+
+    check_interval_seconds = int(check_interval_seconds)
+    status_report_interval_seconds = int(status_report_interval_minutes) * 60
+    last_status_report_time = time.time()
+
+    first_run = True
+    while True:
+        if not silent:
+            print("\033c", end="")  # Clear terminal output
+        if not silent:
+            print("\033[0;36mMonitoring servers...\033[0m")
         if os.path.exists("servers.json"):
             with open("servers.json") as json_file:
                 servers = json.load(json_file).get('servers', [])

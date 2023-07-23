@@ -9,18 +9,23 @@ from telegram import Bot
 # Function to read bot_token, chat_id, and threshold from settings file
 def read_settings():
     if os.path.exists("settings.json"):
-        with open("settings.json") as json_file:
-            settings = json.load(json_file)
-            bot_token = settings.get("bot_token")
-            chat_id = settings.get("chat_id")
-            check_interval = settings.get("check_interval", 20)
-            failure_threshold = settings.get("failure_threshold", 2)  
-            status_report_interval_minutes = settings.get("status_report_interval_minutes", 60)
-            report_only_on_down = settings.get("report_only_on_down", False)
-            return bot_token, chat_id, failure_threshold, check_interval, status_report_interval_minutes, report_only_on_down
+        try:
+            with open("settings.json") as json_file:
+                settings = json.load(json_file)
+                return (
+                    settings.get("bot_token"),
+                    settings.get("chat_id"),
+                    settings.get("failure_threshold"),
+                    settings.get("check_interval_seconds"),
+                    settings.get("status_report_interval_minutes"),
+                    settings.get("report_only_on_down"),
+                )
+        except json.JSONDecodeError:
+            print("Error in settings.json: Invalid JSON syntax. Please check your configuration.")
+            return None
     else:
-        print("Settings file not found: settings.json")
-    return None, None, None, None, None, None
+        print("Configuration file not found: settings.json")
+        return None
 
 
 # Function to send a message via Telegram
