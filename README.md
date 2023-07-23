@@ -9,7 +9,34 @@ A Python-based script that allows you to monitor the status of servers and servi
 3. HTTP(s) Check: Sends an HTTP(s) request to a target URL and checks the response status code. It validates that the status code is 200 and the SSL certificate is present in case it's a https target.
 4. Keyword Check: Verifies if a specific keyword is present or absent in the response content of an HTTP(s) request.
 
-## Installation
+## Docker
+Install Docker
+```shell
+curl -sSL https://get.docker.com | sh
+```
+Download pymon
+```shell
+mkdir -p /opt && cd /opt/ && git clone https://github.com/iandk/pymon.git
+```
+
+Edit configuration
+```shell
+# settings
+mv /opt/pymon/settings-sample.json /opt/pymon/settings.json
+nano /opt/pymon/settings.json
+
+# monitoring targets
+mv /opt/pymon/servers-sample.json /opt/pymon/servers.json
+nano /opt/pymon/servers.json
+
+```
+
+Run container
+```shell
+docker run -d --name pymon -v /opt/pymon:/opt/pymon --network host pymon
+``````
+
+## Manual Installation
 You have two options for running the script: running it in the background, which will automatically monitor for status changes, or running it in the terminal with a graphical output.
 
 ###  Background Service 
