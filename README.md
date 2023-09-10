@@ -30,6 +30,10 @@ mv /opt/pymon/servers-sample.json /opt/pymon/servers.json
 nano /opt/pymon/servers.json
 
 ```
+Build container
+```shell
+cd pymon && docker build .
+``````
 
 Run container
 ```shell
