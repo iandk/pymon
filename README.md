@@ -32,7 +32,7 @@ nano /opt/pymon/servers.json
 ```
 Build container
 ```shell
-cd pymon && docker build .
+cd pymon && docker build -t pymon:latest .
 ``````
 
 Run container
