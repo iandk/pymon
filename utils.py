@@ -55,8 +55,14 @@ def format_timedelta(delta):
 # Function to perform a ping check
 def ping_check(target):
     try:
-        latency = subprocess.check_output(['ping', '-c', '1', target]).decode().split('/')[-3].split('=')[-1]
+        # Add timeout of 5 seconds for ping
+        latency = subprocess.check_output(
+            ['ping', '-c', '1', '-W', '5', target],
+            timeout=6  # subprocess timeout slightly longer than ping timeout
+        ).decode().split('/')[-3].split('=')[-1]
         return ("Up", latency, None)
+    except subprocess.TimeoutExpired:
+        return ("Down", None, "Timeout")
     except Exception as e:
         return ("Down", None, None)
 
@@ -64,9 +70,17 @@ def ping_check(target):
 # Function to perform a port check
 def port_check(target, port):
     try:
-        subprocess.check_call(['nc', '-z', '-w', '5', target, str(port)], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-        status, latency, _ = ping_check(target)  # Ignore the error from ping_check
+        # nc already has 5 second timeout from -w parameter
+        subprocess.check_call(
+            ['nc', '-z', '-w', '5', target, str(port)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT,
+            timeout=6  # subprocess timeout slightly longer than nc timeout
+        )
+        status, latency, _ = ping_check(target)
         return ("Up", latency, None)
+    except subprocess.TimeoutExpired:
+        return ("Down", None, "Timeout")
     except Exception:
         return ("Down", None, None)
 
@@ -75,12 +89,19 @@ def port_check(target, port):
 # Function to perform an HTTP(s) check
 def http_check(target):
     try:
-        response = requests.get(target, verify=certifi.where())  # Use certifi to validate the certificate
+        # Add 10 second timeout for HTTP requests
+        response = requests.get(
+            target,
+            verify=certifi.where(),
+            timeout=10
+        )
         if response.status_code == 200:
-            latency = response.elapsed.total_seconds() * 1000  # Convert to milliseconds
+            latency = response.elapsed.total_seconds() * 1000
             return ("Up", f"{latency:.3f} ms", None)
         else:
             return ("Down", None, f"Returned status code: {response.status_code}")
+    except requests.Timeout:
+        return ("Down", None, "Timeout")
     except SSLError:
         return ("Down", None, "SSL certificate validation failed")
     except Exception as e:
@@ -90,7 +111,12 @@ def http_check(target):
 
 def keyword_check(target, keyword, expect_keyword):
     try:
-        response = requests.get(target, verify=True)
+        # Add 10 second timeout for keyword checks
+        response = requests.get(
+            target,
+            verify=True,
+            timeout=10
+        )
         status_code = response.status_code
         if status_code != 200:
             return ("Down", None, f"Non-200 status code: {status_code}")
@@ -98,8 +124,10 @@ def keyword_check(target, keyword, expect_keyword):
             text = response.text
             keyword_found = keyword in text
             status = "Up" if keyword_found == expect_keyword else "Down"
-            latency = response.elapsed.total_seconds() * 1000  # Convert to milliseconds
+            latency = response.elapsed.total_seconds() * 1000
             return (status, f"{latency:.3f} ms", None if status == "Up" else f"Keyword {'found' if keyword_found else 'not found'}")
+    except requests.Timeout:
+        return ("Down", None, "Timeout")
     except requests.exceptions.SSLError:
         return ("Down", None, "Invalid or self-signed SSL certificate")
     except Exception as e:
