@@ -1,2 +1,6 @@
 requests
-python-telegram-bot
+python-telegram-bot[job-queue]
+aiohttp
+aioping
+aiofiles
+certifi

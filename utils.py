@@ -3,41 +3,125 @@ import subprocess
 import requests
 import json
 import certifi
+import asyncio
 from requests.exceptions import SSLError
 from telegram import Bot
+from typing import Optional, Tuple, Dict, Any
+import logging
 
-# Function to read bot_token, chat_id, and threshold from settings file
-def read_settings():
-    if os.path.exists("settings.json"):
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    filename='monitor.log'
+)
+logger = logging.getLogger(__name__)
+
+class ConfigError(Exception):
+    """Custom exception for configuration errors"""
+    pass
+
+async def notify_error(message: str, chat_id: Optional[str] = None, bot_token: Optional[str] = None):
+    """Send error notification via both logging and Telegram if credentials available"""
+    logger.error(message)
+    if chat_id and bot_token:
         try:
-            with open("settings.json") as json_file:
-                settings = json.load(json_file)
-                return (
-                    settings.get("bot_token"),
-                    settings.get("chat_id"),
-                    settings.get("failure_threshold"),
-                    settings.get("check_interval_seconds"),
-                    settings.get("status_report_interval_minutes"),
-                    settings.get("report_only_on_down"),
-                )
-        except json.JSONDecodeError:
-            print("Error in settings.json: Invalid JSON syntax. Please check your configuration.")
-            return None
-    else:
-        print("Configuration file not found: settings.json")
-        return None
+            await send_telegram_message(f"⚠️ Configuration Error: {message}", chat_id, bot_token)
+        except Exception as e:
+            logger.error(f"Failed to send Telegram notification: {e}")
 
+def validate_json_structure(data: Dict[str, Any], file_name: str) -> None:
+    """Validate JSON structure and raise ConfigError if invalid"""
+    if file_name == "settings.json":
+        required_fields = {
+            "bot_token": str,
+            "chat_id": str,
+            "failure_threshold": int,
+            "check_interval_seconds": int,
+            "status_report_interval_minutes": int
+        }
+        
+        for field, expected_type in required_fields.items():
+            if field not in data:
+                raise ConfigError(f"Missing required field: {field}")
+            if not isinstance(data[field], expected_type):
+                raise ConfigError(f"Invalid type for {field}: expected {expected_type.__name__}")
+                
+    elif file_name == "servers.json":
+        if not isinstance(data.get("servers"), list):
+            raise ConfigError("Missing or invalid 'servers' array")
+            
+        for idx, server in enumerate(data["servers"]):
+            required_server_fields = {
+                "description": str,
+                "type": str,
+                "target": str
+            }
+            
+            for field, expected_type in required_server_fields.items():
+                if field not in server:
+                    raise ConfigError(f"Server #{idx + 1}: Missing required field: {field}")
+                if not isinstance(server[field], expected_type):
+                    raise ConfigError(f"Server #{idx + 1}: Invalid type for {field}")
+                    
+            if server["type"] not in ["ping", "port", "http", "keyword"]:
+                raise ConfigError(f"Server #{idx + 1}: Invalid type value: {server['type']}")
 
-# Function to send a message via Telegram
-async def send_telegram_message(message, chat_id, bot_token):
+def read_settings():
+    """Read and validate settings with enhanced error handling"""
+    if not os.path.exists("settings.json"):
+        raise ConfigError("Configuration file not found: settings.json")
+        
     try:
-        bot = Bot(token=bot_token)
-        await bot.send_message(chat_id=chat_id, text=message)
+        with open("settings.json") as json_file:
+            settings = json.load(json_file)
+            validate_json_structure(settings, "settings.json")
+            
+            return (
+                settings.get("bot_token"),
+                settings.get("chat_id"),
+                settings.get("failure_threshold"),
+                settings.get("check_interval_seconds"),
+                settings.get("status_report_interval_minutes"),
+                settings.get("report_only_on_down", False)
+            )
+    except json.JSONDecodeError as e:
+        line_col = f" at line {e.lineno}, column {e.colno}"
+        raise ConfigError(f"Invalid JSON syntax in settings.json{line_col}: {e.msg}")
     except Exception as e:
-        print(f"Failed to send Telegram message: {e}")
+        raise ConfigError(f"Error reading settings.json: {str(e)}")
 
+def read_servers():
+    """Read and validate servers configuration with enhanced error handling"""
+    if not os.path.exists("servers.json"):
+        raise ConfigError("Configuration file not found: servers.json")
+        
+    try:
+        with open("servers.json") as json_file:
+            config = json.load(json_file)
+            validate_json_structure(config, "servers.json")
+            return config["servers"]
+    except json.JSONDecodeError as e:
+        line_col = f" at line {e.lineno}, column {e.colno}"
+        raise ConfigError(f"Invalid JSON syntax in servers.json{line_col}: {e.msg}")
+    except Exception as e:
+        raise ConfigError(f"Error reading servers.json: {str(e)}")
+
+async def send_telegram_message(message: str, chat_id: str, bot_token: str, retry_count: int = 3):
+    """Send Telegram message with retries"""
+    for attempt in range(retry_count):
+        try:
+            bot = Bot(token=bot_token)
+            await bot.send_message(chat_id=chat_id, text=message)
+            return
+        except Exception as e:
+            if attempt == retry_count - 1:  # Last attempt
+                logger.error(f"Failed to send Telegram message after {retry_count} attempts: {e}")
+            else:
+                await asyncio.sleep(1)  # Wait before retry
 
 def format_timedelta(delta):
+    """Format a timedelta into a human-readable string"""
     days = delta.days
     hours, remainder = divmod(delta.seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
@@ -51,84 +135,93 @@ def format_timedelta(delta):
     else:
         return f"{seconds}s"
 
-
-# Function to perform a ping check
-def ping_check(target):
+def ping_check(target: str) -> Tuple[str, Optional[str], Optional[str]]:
+    """Perform ping check with better error handling"""
     try:
-        # Add timeout of 5 seconds for ping
-        latency = subprocess.check_output(
+        result = subprocess.run(
             ['ping', '-c', '1', '-W', '5', target],
-            timeout=6  # subprocess timeout slightly longer than ping timeout
-        ).decode().split('/')[-3].split('=')[-1]
-        return ("Up", latency, None)
+            capture_output=True,
+            text=True,
+            timeout=6
+        )
+        if result.returncode == 0:
+            latency = result.stdout.split('/')[-3].split('=')[-1].strip()
+            return ("Up", latency, None)
+        else:
+            return ("Down", None, result.stderr.strip())
     except subprocess.TimeoutExpired:
         return ("Down", None, "Timeout")
     except Exception as e:
-        return ("Down", None, None)
+        logger.error(f"Ping check error for {target}: {str(e)}")
+        return ("Down", None, str(e))
 
-
-# Function to perform a port check
-def port_check(target, port):
+def port_check(target: str, port: int) -> Tuple[str, Optional[str], Optional[str]]:
+    """Perform port check with better error handling"""
     try:
-        # nc already has 5 second timeout from -w parameter
-        subprocess.check_call(
+        result = subprocess.run(
             ['nc', '-z', '-w', '5', target, str(port)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.STDOUT,
-            timeout=6  # subprocess timeout slightly longer than nc timeout
+            capture_output=True,
+            text=True,
+            timeout=6
         )
-        status, latency, _ = ping_check(target)
-        return ("Up", latency, None)
+        if result.returncode == 0:
+            status, latency, _ = ping_check(target)
+            return ("Up", latency, None)
+        else:
+            return ("Down", None, result.stderr.strip())
     except subprocess.TimeoutExpired:
         return ("Down", None, "Timeout")
-    except Exception:
-        return ("Down", None, None)
+    except Exception as e:
+        logger.error(f"Port check error for {target}:{port}: {str(e)}")
+        return ("Down", None, str(e))
 
-
-
-# Function to perform an HTTP(s) check
-def http_check(target):
+def http_check(target: str) -> Tuple[str, Optional[str], Optional[str]]:
+    """Perform HTTP check with better error handling"""
     try:
-        # Add 10 second timeout for HTTP requests
-        response = requests.get(
-            target,
-            verify=certifi.where(),
-            timeout=10
-        )
+        session = requests.Session()
+        session.verify = certifi.where()
+        response = session.get(target, timeout=10)
+        
         if response.status_code == 200:
             latency = response.elapsed.total_seconds() * 1000
             return ("Up", f"{latency:.3f} ms", None)
         else:
-            return ("Down", None, f"Returned status code: {response.status_code}")
+            return ("Down", None, f"Status code: {response.status_code}")
     except requests.Timeout:
         return ("Down", None, "Timeout")
     except SSLError:
         return ("Down", None, "SSL certificate validation failed")
     except Exception as e:
-        return ("Down", None, None)
+        logger.error(f"HTTP check error for {target}: {str(e)}")
+        return ("Down", None, str(e))
+    finally:
+        session.close()
 
-
-
-def keyword_check(target, keyword, expect_keyword):
+def keyword_check(target: str, keyword: str, expect_keyword: bool) -> Tuple[str, Optional[str], Optional[str]]:
+    """Perform keyword check with better error handling"""
     try:
-        # Add 10 second timeout for keyword checks
-        response = requests.get(
-            target,
-            verify=True,
-            timeout=10
-        )
-        status_code = response.status_code
-        if status_code != 200:
-            return ("Down", None, f"Non-200 status code: {status_code}")
+        session = requests.Session()
+        session.verify = certifi.where()
+        response = session.get(target, timeout=10)
+        
+        if response.status_code != 200:
+            return ("Down", None, f"Status code: {response.status_code}")
+        
+        text = response.text
+        keyword_found = keyword.lower() in text.lower()
+        status = "Up" if keyword_found == expect_keyword else "Down"
+        latency = response.elapsed.total_seconds() * 1000
+        
+        if status == "Up":
+            return (status, f"{latency:.3f} ms", None)
         else:
-            text = response.text
-            keyword_found = keyword in text
-            status = "Up" if keyword_found == expect_keyword else "Down"
-            latency = response.elapsed.total_seconds() * 1000
-            return (status, f"{latency:.3f} ms", None if status == "Up" else f"Keyword {'found' if keyword_found else 'not found'}")
+            return (status, None, f"Keyword {'found' if keyword_found else 'not found'}")
     except requests.Timeout:
         return ("Down", None, "Timeout")
-    except requests.exceptions.SSLError:
-        return ("Down", None, "Invalid or self-signed SSL certificate")
+    except SSLError:
+        return ("Down", None, "SSL certificate validation failed")
     except Exception as e:
+        logger.error(f"Keyword check error for {target}: {str(e)}")
         return ("Down", None, str(e))
+    finally:
+        session.close()
