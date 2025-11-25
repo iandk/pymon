@@ -1,10 +1,11 @@
 import time
 import asyncio
 from utils import (
-    read_settings, read_servers, ping_check, port_check, http_check, 
+    read_settings, read_servers, ping_check, port_check, http_check,
     keyword_check, format_timedelta, send_telegram_message, notify_error,
     ConfigError
 )
+from display import get_display
 import datetime
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -14,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 # Create executor as module-level variable
 executor = ThreadPoolExecutor(max_workers=10)
+
+# Shutdown event for graceful termination
+shutdown_event = asyncio.Event()
 
 # Declare dictionaries to store previous status, downtime start time and fail_count for each server
 previous_status = {}
@@ -39,7 +43,7 @@ def generate_status_report():
 
     return report
 
-async def check_server(description, type_, target, port=None, keyword=None, expect_keyword=None, failure_threshold=None, silent=False):
+async def check_server(description, type_, target, port=None, keyword=None, expect_keyword=None, failure_threshold=None, silent=False, display=None):
     """Check a single server with better error handling and retry logic"""
     try:
         settings = read_settings()
@@ -60,17 +64,14 @@ async def check_server(description, type_, target, port=None, keyword=None, expe
                 status, latency, error = await asyncio.get_event_loop().run_in_executor(
                     executor, ping_check, target
                 )
-                latency_suffix = " ms"
             elif type_ == 'port':
                 status, latency, error = await asyncio.get_event_loop().run_in_executor(
                     executor, port_check, target, port
                 )
-                latency_suffix = " ms"
             elif type_ == 'http':
                 status, latency, error = await asyncio.get_event_loop().run_in_executor(
                     executor, http_check, target
                 )
-                latency_suffix = ""
             elif type_ == 'keyword':
                 if keyword is None or expect_keyword is None:
                     await notify_error(f"Invalid configuration for keyword check: {description}", chat_id, bot_token)
@@ -78,7 +79,6 @@ async def check_server(description, type_, target, port=None, keyword=None, expe
                 status, latency, error = await asyncio.get_event_loop().run_in_executor(
                     executor, keyword_check, target, keyword, expect_keyword
                 )
-                latency_suffix = ""
             else:
                 await notify_error(f"Invalid type or type not specified: {description}", chat_id, bot_token)
                 return
@@ -105,17 +105,16 @@ async def check_server(description, type_, target, port=None, keyword=None, expe
                         bot_token
                     )
 
-            if not silent:
-                if status == "Up":
-                    print(f"{description: <30} \033[0;32m{status}\033[0m ({latency}{latency_suffix})")
-                else:
-                    reason = f" {error}" if error is not None else ""
-                    print(f"{description: <30} \033[0;31m{status}\033[0m{reason}")
+            # Update display
+            if display:
+                display.update_server(description, status, latency, error)
 
         except Exception as e:
             error_msg = f"Error checking server {description}: {str(e)}"
             await notify_error(error_msg, chat_id, bot_token)
             logger.error(error_msg)
+            if display:
+                display.update_server(description, "Down", None, str(e))
 
     except ConfigError as e:
         logger.error(f"Configuration error while checking {description}: {str(e)}")
@@ -124,93 +123,92 @@ async def check_server(description, type_, target, port=None, keyword=None, expe
 
 async def monitor_servers(silent=False):
     """Monitor servers with enhanced error handling and configuration validation"""
-    settings = None
-    
+    # Validate all configuration at startup before entering the loop
     try:
-        # Try to read settings first
         settings = read_settings()
-        if settings is None:
-            return
-
-        bot_token, chat_id, failure_threshold, check_interval_seconds, status_report_interval_minutes, report_only_if_down = settings
-        if None in (bot_token, chat_id, failure_threshold, check_interval_seconds):
-            await notify_error("Invalid settings configuration", chat_id, bot_token)
-            return
-
-        check_interval_seconds = int(check_interval_seconds)
-        status_report_interval_seconds = int(status_report_interval_minutes) * 60
-        last_status_report_time = time.time()
-
-        first_run = True
-        while True:
-            try:
-                if not silent:
-                    print("\033c", end="")
-                    print("\033[0;36mMonitoring servers...\033[0m")
-
-                # Read and validate servers configuration
-                try:
-                    servers = read_servers()
-                    
-                    # Check servers in parallel
-                    tasks = []
-                    for server in servers:
-                        task = check_server(
-                            server['description'],
-                            server['type'],
-                            server['target'],
-                            server.get('port'),
-                            server.get('keyword'),
-                            server.get('expect_keyword'),
-                            failure_threshold,
-                            silent
-                        )
-                        tasks.append(task)
-                    
-                    await asyncio.gather(*tasks)
-
-                    if first_run:
-                        first_run = False
-                        report = generate_status_report()
-                        await send_telegram_message(report, chat_id, bot_token)
-
-                    # Send status report at specified interval
-                    current_time = time.time()
-                    if current_time - last_status_report_time >= status_report_interval_seconds:
-                        report = generate_status_report()
-                        if not report_only_if_down or "Down" in report:
-                            await send_telegram_message(report, chat_id, bot_token)
-                        last_status_report_time = current_time
-
-                except ConfigError as e:
-                    error_msg = f"Configuration error: {str(e)}"
-                    await notify_error(error_msg, chat_id, bot_token)
-                    logger.error(error_msg)
-                    # Don't break here, allow retrying on next iteration
-                    await asyncio.sleep(check_interval_seconds)
-                    continue
-
-            except Exception as e:
-                error_msg = f"Monitoring error: {str(e)}"
-                await notify_error(error_msg, chat_id, bot_token)
-                logger.error(error_msg)
-            
-            await asyncio.sleep(check_interval_seconds)
-
     except ConfigError as e:
-        # Handle configuration errors with both logging and notification
-        error_msg = f"Fatal configuration error: {str(e)}"
-        if settings and all(settings[:2]):  # If we have valid bot_token and chat_id
-            await notify_error(error_msg, settings[1], settings[0])
-        else:
-            logger.error(error_msg)
-        raise  # Re-raise to stop the monitor
+        raise ConfigError(f"Settings error: {e}")
 
-    except Exception as e:
-        # Handle unexpected errors
-        error_msg = f"Fatal error in monitor: {str(e)}"
-        if settings and all(settings[:2]):
-            await notify_error(error_msg, settings[1], settings[0])
-        else:
-            logger.error(error_msg)
-        raise
+    bot_token, chat_id, failure_threshold, check_interval_seconds, status_report_interval_minutes, report_only_if_down = settings
+
+    # Validate servers.yaml exists at startup
+    try:
+        servers = read_servers()
+    except ConfigError as e:
+        raise ConfigError(f"Servers config error: {e}")
+
+    check_interval_seconds = int(check_interval_seconds)
+    status_report_interval_seconds = int(status_report_interval_minutes) * 60
+    last_status_report_time = time.time()
+
+    # Initialize display
+    display = get_display() if not silent else None
+
+    first_run = True
+    while not shutdown_event.is_set():
+        try:
+            # Re-read servers config to pick up changes
+            try:
+                servers = read_servers()
+            except ConfigError as e:
+                logger.error(f"Failed to reload servers.yaml: {e}")
+                # Use wait with timeout instead of sleep to respond to shutdown
+                try:
+                    await asyncio.wait_for(shutdown_event.wait(), timeout=check_interval_seconds)
+                    break  # Shutdown requested
+                except asyncio.TimeoutError:
+                    pass
+                continue
+
+            # Clear old results before new check cycle
+            if display:
+                display.clear_results()
+
+            # Check servers in parallel
+            tasks = []
+            for server in servers:
+                task = check_server(
+                    server['description'],
+                    server['type'],
+                    server['target'],
+                    server.get('port'),
+                    server.get('keyword'),
+                    server.get('expect_keyword'),
+                    failure_threshold,
+                    silent,
+                    display
+                )
+                tasks.append(task)
+
+            await asyncio.gather(*tasks)
+
+            # Print results after all checks complete
+            if display:
+                display.clear()
+                display.print_header()
+                display.print_results()
+
+            if first_run:
+                first_run = False
+                report = generate_status_report()
+                await send_telegram_message(report, chat_id, bot_token)
+
+            # Send status report at specified interval
+            current_time = time.time()
+            if current_time - last_status_report_time >= status_report_interval_seconds:
+                report = generate_status_report()
+                if not report_only_if_down or "Down" in report:
+                    await send_telegram_message(report, chat_id, bot_token)
+                last_status_report_time = current_time
+
+        except Exception as e:
+            logger.error(f"Monitoring error: {str(e)}")
+
+        # Use wait with timeout instead of sleep to respond to shutdown quickly
+        try:
+            await asyncio.wait_for(shutdown_event.wait(), timeout=check_interval_seconds)
+            break  # Shutdown requested
+        except asyncio.TimeoutError:
+            pass  # Continue monitoring
+
+    logger.info("Monitor loop exited gracefully")

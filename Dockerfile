@@ -1,13 +1,13 @@
 # Use an official Python runtime as a parent image
-FROM python:3.9-slim-buster
+FROM python:3.9-slim-bookworm
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # Install system dependencies
 RUN apt-get update \
-  && apt-get install -y netcat-openbsd iputils-ping \
+  && apt-get install -y --no-install-recommends netcat-openbsd iputils-ping \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 

@@ -1,2 +1,5 @@
 __pycache__/*
 myvenv/*
+.env
+servers.yaml
+monitor.log

@@ -1,0 +1,22 @@
+# Server monitoring configuration
+# Each server requires: description, type, target
+# Types: ping, port, http, keyword
+
+- description: "1.1.1.1"
+  type: ping
+  target: "1.1.1.1"
+
+- description: "v6Node.com"
+  type: http
+  target: "https://v6node.com"
+
+- description: "Google"
+  type: port
+  target: "google.com"
+  port: 80
+
+- description: "v6Node Keyword check"
+  type: keyword
+  target: "https://v6node.com"
+  keyword: "v6node"
+  expect_keyword: true

@@ -1,20 +1,16 @@
 import os
 import subprocess
 import requests
-import json
+import yaml
 import certifi
 import asyncio
+from dotenv import load_dotenv
 from requests.exceptions import SSLError
 from telegram import Bot
 from typing import Optional, Tuple, Dict, Any
 import logging
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    filename='monitor.log'
-)
+load_dotenv()
 logger = logging.getLogger(__name__)
 
 class ConfigError(Exception):
@@ -30,82 +26,75 @@ async def notify_error(message: str, chat_id: Optional[str] = None, bot_token: O
         except Exception as e:
             logger.error(f"Failed to send Telegram notification: {e}")
 
-def validate_json_structure(data: Dict[str, Any], file_name: str) -> None:
-    """Validate JSON structure and raise ConfigError if invalid"""
-    if file_name == "settings.json":
-        required_fields = {
-            "bot_token": str,
-            "chat_id": str,
-            "failure_threshold": int,
-            "check_interval_seconds": int,
-            "status_report_interval_minutes": int
+def validate_servers(data: list) -> None:
+    """Validate servers YAML structure and raise ConfigError if invalid"""
+    if not isinstance(data, list):
+        raise ConfigError("servers.yaml must contain a list of servers")
+
+    for idx, server in enumerate(data):
+        required_server_fields = {
+            "description": str,
+            "type": str,
+            "target": str
         }
-        
-        for field, expected_type in required_fields.items():
-            if field not in data:
-                raise ConfigError(f"Missing required field: {field}")
-            if not isinstance(data[field], expected_type):
-                raise ConfigError(f"Invalid type for {field}: expected {expected_type.__name__}")
-                
-    elif file_name == "servers.json":
-        if not isinstance(data.get("servers"), list):
-            raise ConfigError("Missing or invalid 'servers' array")
-            
-        for idx, server in enumerate(data["servers"]):
-            required_server_fields = {
-                "description": str,
-                "type": str,
-                "target": str
-            }
-            
-            for field, expected_type in required_server_fields.items():
-                if field not in server:
-                    raise ConfigError(f"Server #{idx + 1}: Missing required field: {field}")
-                if not isinstance(server[field], expected_type):
-                    raise ConfigError(f"Server #{idx + 1}: Invalid type for {field}")
-                    
-            if server["type"] not in ["ping", "port", "http", "keyword"]:
-                raise ConfigError(f"Server #{idx + 1}: Invalid type value: {server['type']}")
+
+        for field, expected_type in required_server_fields.items():
+            if field not in server:
+                raise ConfigError(f"Server #{idx + 1}: Missing required field: {field}")
+            if not isinstance(server[field], expected_type):
+                raise ConfigError(f"Server #{idx + 1}: Invalid type for {field}")
+
+        if server["type"] not in ["ping", "port", "http", "keyword"]:
+            raise ConfigError(f"Server #{idx + 1}: Invalid type value: {server['type']}")
 
 def read_settings():
-    """Read and validate settings with enhanced error handling"""
-    if not os.path.exists("settings.json"):
-        raise ConfigError("Configuration file not found: settings.json")
-        
+    """Read settings from environment variables"""
+    bot_token = os.getenv("BOT_TOKEN")
+    chat_id = os.getenv("CHAT_ID")
+    failure_threshold = os.getenv("FAILURE_THRESHOLD", "3")
+    check_interval = os.getenv("CHECK_INTERVAL_SECONDS", "60")
+    status_report_interval = os.getenv("STATUS_REPORT_INTERVAL_MINUTES", "60")
+    report_only_on_down = os.getenv("REPORT_ONLY_ON_DOWN", "false").lower() == "true"
+
+    if not bot_token:
+        raise ConfigError("Missing required environment variable: BOT_TOKEN")
+    if not chat_id:
+        raise ConfigError("Missing required environment variable: CHAT_ID")
+
     try:
-        with open("settings.json") as json_file:
-            settings = json.load(json_file)
-            validate_json_structure(settings, "settings.json")
-            
-            return (
-                settings.get("bot_token"),
-                settings.get("chat_id"),
-                settings.get("failure_threshold"),
-                settings.get("check_interval_seconds"),
-                settings.get("status_report_interval_minutes"),
-                settings.get("report_only_on_down", False)
-            )
-    except json.JSONDecodeError as e:
-        line_col = f" at line {e.lineno}, column {e.colno}"
-        raise ConfigError(f"Invalid JSON syntax in settings.json{line_col}: {e.msg}")
-    except Exception as e:
-        raise ConfigError(f"Error reading settings.json: {str(e)}")
+        failure_threshold = int(failure_threshold)
+        check_interval = int(check_interval)
+        status_report_interval = int(status_report_interval)
+    except ValueError as e:
+        raise ConfigError(f"Invalid integer value in environment: {e}")
+
+    return (
+        bot_token,
+        chat_id,
+        failure_threshold,
+        check_interval,
+        status_report_interval,
+        report_only_on_down
+    )
 
 def read_servers():
-    """Read and validate servers configuration with enhanced error handling"""
-    if not os.path.exists("servers.json"):
-        raise ConfigError("Configuration file not found: servers.json")
-        
+    """Read and validate servers configuration from YAML file"""
+    servers_file = os.getenv("SERVERS_FILE", "servers.yaml")
+
+    if not os.path.exists(servers_file):
+        raise ConfigError(f"Configuration file not found: {servers_file}")
+
     try:
-        with open("servers.json") as json_file:
-            config = json.load(json_file)
-            validate_json_structure(config, "servers.json")
-            return config["servers"]
-    except json.JSONDecodeError as e:
-        line_col = f" at line {e.lineno}, column {e.colno}"
-        raise ConfigError(f"Invalid JSON syntax in servers.json{line_col}: {e.msg}")
+        with open(servers_file) as yaml_file:
+            servers = yaml.safe_load(yaml_file)
+            validate_servers(servers)
+            return servers
+    except yaml.YAMLError as e:
+        raise ConfigError(f"Invalid YAML syntax in {servers_file}: {e}")
+    except ConfigError:
+        raise
     except Exception as e:
-        raise ConfigError(f"Error reading servers.json: {str(e)}")
+        raise ConfigError(f"Error reading {servers_file}: {str(e)}")
 
 async def send_telegram_message(message: str, chat_id: str, bot_token: str, retry_count: int = 3):
     """Send Telegram message with retries"""

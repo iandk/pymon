@@ -1,0 +1,10 @@
+services:
+  pymon:
+    build: .
+    image: pymon:latest
+    container_name: pymon
+    restart: unless-stopped
+    volumes:
+      - ./config:/opt/pymon/config:ro
+    environment:
+      - PYTHONUNBUFFERED=1
