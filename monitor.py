@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 # Create executor as module-level variable
 executor = ThreadPoolExecutor(max_workers=10)
 
-# Shutdown event for graceful termination
-shutdown_event = asyncio.Event()
+# Shutdown event for graceful termination (will be created in event loop)
+shutdown_event = None
 
 # Declare dictionaries to store previous status, downtime start time and fail_count for each server
 previous_status = {}
@@ -128,6 +128,11 @@ async def check_server(description, type_, target, port=None, keyword=None, expe
 
 async def monitor_servers(silent=False):
     """Monitor servers with enhanced error handling and configuration validation"""
+    global shutdown_event
+    
+    # Create shutdown event in the current event loop
+    shutdown_event = asyncio.Event()
+    
     # Validate all configuration at startup before entering the loop
     try:
         settings = read_settings()
