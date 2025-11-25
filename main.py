@@ -54,8 +54,10 @@ async def main():
         if not _silent_mode:
             print(f"\nConfiguration Error: {e}")
             print("\nMake sure you have:")
-            print("  1. Copied .env.sample to .env and set BOT_TOKEN and CHAT_ID")
-            print("  2. Copied servers-sample.yaml to servers.yaml")
+            print("  1. Copied .env.sample to .env and configured settings")
+            print("  2. Set ENABLE_TELEGRAM=false if you don't want Telegram notifications")
+            print("  3. If ENABLE_TELEGRAM=true, set BOT_TOKEN and CHAT_ID")
+            print("  4. Copied servers-sample.yaml to servers.yaml")
         sys.exit(1)
     except Exception as e:
         logger.error(f"Fatal error: {str(e)}")

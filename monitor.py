@@ -51,11 +51,11 @@ async def check_server(description, type_, target, port=None, keyword=None, expe
             return
 
         bot_token, chat_id, _, _, _, _ = settings
-        if bot_token is None or chat_id is None:
-            return
+        telegram_enabled = bot_token is not None and chat_id is not None
 
         if failure_threshold is None:
-            await notify_error(f"Failure threshold not specified: {description}", chat_id, bot_token)
+            if telegram_enabled:
+                await notify_error(f"Failure threshold not specified: {description}", chat_id, bot_token)
             return
 
         # Use ThreadPoolExecutor for CPU-bound checks
@@ -74,13 +74,15 @@ async def check_server(description, type_, target, port=None, keyword=None, expe
                 )
             elif type_ == 'keyword':
                 if keyword is None or expect_keyword is None:
-                    await notify_error(f"Invalid configuration for keyword check: {description}", chat_id, bot_token)
+                    if telegram_enabled:
+                        await notify_error(f"Invalid configuration for keyword check: {description}", chat_id, bot_token)
                     return
                 status, latency, error = await asyncio.get_event_loop().run_in_executor(
                     executor, keyword_check, target, keyword, expect_keyword
                 )
             else:
-                await notify_error(f"Invalid type or type not specified: {description}", chat_id, bot_token)
+                if telegram_enabled:
+                    await notify_error(f"Invalid type or type not specified: {description}", chat_id, bot_token)
                 return
 
             if status == "Down":
@@ -89,7 +91,8 @@ async def check_server(description, type_, target, port=None, keyword=None, expe
                     message = f"❌ {description} is down"
                     if error is not None:
                         message += f". {error}"
-                    await send_telegram_message(message, chat_id, bot_token)
+                    if telegram_enabled:
+                        await send_telegram_message(message, chat_id, bot_token)
                     previous_status[description] = "Down"
                     downtime_start[description] = datetime.datetime.now()
             else:
@@ -99,11 +102,12 @@ async def check_server(description, type_, target, port=None, keyword=None, expe
                 if was_down:
                     downtime = datetime.datetime.now() - downtime_start[description]
                     downtime_formatted = format_timedelta(downtime)
-                    await send_telegram_message(
-                        f"✅ {description} is back up. Downtime: {downtime_formatted}",
-                        chat_id,
-                        bot_token
-                    )
+                    if telegram_enabled:
+                        await send_telegram_message(
+                            f"✅ {description} is back up. Downtime: {downtime_formatted}",
+                            chat_id,
+                            bot_token
+                        )
 
             # Update display
             if display:
@@ -111,7 +115,8 @@ async def check_server(description, type_, target, port=None, keyword=None, expe
 
         except Exception as e:
             error_msg = f"Error checking server {description}: {str(e)}"
-            await notify_error(error_msg, chat_id, bot_token)
+            if telegram_enabled:
+                await notify_error(error_msg, chat_id, bot_token)
             logger.error(error_msg)
             if display:
                 display.update_server(description, "Down", None, str(e))
@@ -190,15 +195,17 @@ async def monitor_servers(silent=False):
 
             if first_run:
                 first_run = False
-                report = generate_status_report()
-                await send_telegram_message(report, chat_id, bot_token)
+                if bot_token and chat_id:
+                    report = generate_status_report()
+                    await send_telegram_message(report, chat_id, bot_token)
 
             # Send status report at specified interval
             current_time = time.time()
             if current_time - last_status_report_time >= status_report_interval_seconds:
-                report = generate_status_report()
-                if not report_only_if_down or "Down" in report:
-                    await send_telegram_message(report, chat_id, bot_token)
+                if bot_token and chat_id:
+                    report = generate_status_report()
+                    if not report_only_if_down or "Down" in report:
+                        await send_telegram_message(report, chat_id, bot_token)
                 last_status_report_time = current_time
 
         except Exception as e:

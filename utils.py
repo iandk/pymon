@@ -49,6 +49,7 @@ def validate_servers(data: list) -> None:
 
 def read_settings():
     """Read settings from environment variables"""
+    enable_telegram = os.getenv("ENABLE_TELEGRAM", "true").lower() == "true"
     bot_token = os.getenv("BOT_TOKEN")
     chat_id = os.getenv("CHAT_ID")
     failure_threshold = os.getenv("FAILURE_THRESHOLD", "3")
@@ -56,10 +57,16 @@ def read_settings():
     status_report_interval = os.getenv("STATUS_REPORT_INTERVAL_MINUTES", "60")
     report_only_on_down = os.getenv("REPORT_ONLY_ON_DOWN", "false").lower() == "true"
 
-    if not bot_token:
-        raise ConfigError("Missing required environment variable: BOT_TOKEN")
-    if not chat_id:
-        raise ConfigError("Missing required environment variable: CHAT_ID")
+    # Only validate Telegram credentials if Telegram is enabled
+    if enable_telegram:
+        if not bot_token:
+            raise ConfigError("Missing required environment variable: BOT_TOKEN")
+        if not chat_id:
+            raise ConfigError("Missing required environment variable: CHAT_ID")
+    else:
+        # If Telegram is disabled, set to None
+        bot_token = None
+        chat_id = None
 
     try:
         failure_threshold = int(failure_threshold)
