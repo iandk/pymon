@@ -5,7 +5,7 @@ After=network.target
 [Service]
 User=root
 WorkingDirectory=/opt/pymon
-ExecStart=/opt/pymon/myvenv/bin/python3 main.py --silent
+ExecStart=/usr/bin/python3 main.py --silent
 Restart=always
 
 [Install]

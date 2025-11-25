@@ -7,19 +7,10 @@ apt update
 mkdir -p /opt/pymon && cd /opt/pymon
 
 # Install Python 3 and pip
-apt install -y python3 python3-venv python3-pip netcat-openbsd 
+apt install -y python3 python3-pip netcat-openbsd
 
-# Create a virtual environment
-python3 -m venv myvenv
-
-# Activate the virtual environment
-source myvenv/bin/activate
-
-# Install required packages
-pip install -r requirements.txt
-
-# Deactivate the virtual environment
-deactivate
+# Install required Python packages system-wide
+pip3 install -r requirements.txt --break-system-packages
 
 # Setup systemd service file
 cp pymon.service /etc/systemd/system/pymon.service
