@@ -19,10 +19,11 @@ executor = ThreadPoolExecutor(max_workers=10)
 # Shutdown event for graceful termination (will be created in event loop)
 shutdown_event = None
 
-# Declare dictionaries to store previous status, downtime start time and fail_count for each server
+# Declare dictionaries to store previous status, downtime start time and fail/recovery counts for each server
 previous_status = {}
 downtime_start = {}
 fail_count = {}
+recovery_count = {}
 
 def generate_status_report():
     """Generate a status report of all servers"""
@@ -43,7 +44,7 @@ def generate_status_report():
 
     return report
 
-async def check_server(description, type_, target, port=None, keyword=None, expect_keyword=None, failure_threshold=None, silent=False, display=None):
+async def check_server(description, type_, target, port=None, keyword=None, expect_keyword=None, failure_threshold=None, recovery_threshold=None, silent=False, display=None):
     """Check a single server with better error handling and retry logic"""
     try:
         settings = read_settings()
@@ -87,6 +88,7 @@ async def check_server(description, type_, target, port=None, keyword=None, expe
 
             if status == "Down":
                 fail_count[description] = fail_count.get(description, 0) + 1
+                recovery_count[description] = 0  # Reset recovery count on failure
                 if previous_status.get(description) != "Down" and fail_count[description] >= failure_threshold:
                     message = f"❌ {description} is down"
                     if error is not None:
@@ -98,16 +100,21 @@ async def check_server(description, type_, target, port=None, keyword=None, expe
             else:
                 fail_count[description] = 0  # Reset failure count on success
                 was_down = previous_status.get(description) == "Down"
-                previous_status[description] = "Up"  # Store the status of the server
                 if was_down:
-                    downtime = datetime.datetime.now() - downtime_start[description]
-                    downtime_formatted = format_timedelta(downtime)
-                    if telegram_enabled:
-                        await send_telegram_message(
-                            f"✅ {description} is back up. Downtime: {downtime_formatted}",
-                            chat_id,
-                            bot_token
-                        )
+                    recovery_count[description] = recovery_count.get(description, 0) + 1
+                    if recovery_count[description] >= recovery_threshold:
+                        previous_status[description] = "Up"
+                        recovery_count[description] = 0
+                        downtime = datetime.datetime.now() - downtime_start[description]
+                        downtime_formatted = format_timedelta(downtime)
+                        if telegram_enabled:
+                            await send_telegram_message(
+                                f"✅ {description} is back up. Downtime: {downtime_formatted}",
+                                chat_id,
+                                bot_token
+                            )
+                else:
+                    previous_status[description] = "Up"
 
             # Update display
             if display:
@@ -139,7 +146,7 @@ async def monitor_servers(silent=False):
     except ConfigError as e:
         raise ConfigError(f"Settings error: {e}")
 
-    bot_token, chat_id, failure_threshold, check_interval_seconds, status_report_interval_minutes, report_only_if_down = settings
+    bot_token, chat_id, failure_threshold, recovery_threshold, check_interval_seconds, status_report_interval_minutes, report_only_if_down = settings
 
     # Validate servers.yaml exists at startup
     try:
@@ -185,6 +192,7 @@ async def monitor_servers(silent=False):
                     server.get('keyword'),
                     server.get('expect_keyword'),
                     failure_threshold,
+                    recovery_threshold,
                     silent,
                     display
                 )

@@ -53,6 +53,7 @@ def read_settings():
     bot_token = os.getenv("BOT_TOKEN")
     chat_id = os.getenv("CHAT_ID")
     failure_threshold = os.getenv("FAILURE_THRESHOLD", "3")
+    recovery_threshold = os.getenv("RECOVERY_THRESHOLD", "3")
     check_interval = os.getenv("CHECK_INTERVAL_SECONDS", "60")
     status_report_interval = os.getenv("STATUS_REPORT_INTERVAL_MINUTES", "60")
     report_only_on_down = os.getenv("REPORT_ONLY_ON_DOWN", "false").lower() == "true"
@@ -70,6 +71,7 @@ def read_settings():
 
     try:
         failure_threshold = int(failure_threshold)
+        recovery_threshold = int(recovery_threshold)
         check_interval = int(check_interval)
         status_report_interval = int(status_report_interval)
     except ValueError as e:
@@ -79,6 +81,7 @@ def read_settings():
         bot_token,
         chat_id,
         failure_threshold,
+        recovery_threshold,
         check_interval,
         status_report_interval,
         report_only_on_down
