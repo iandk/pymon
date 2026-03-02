@@ -21,9 +21,8 @@ logger = logging.getLogger(__name__)
 _silent_mode = False
 
 
-def handle_shutdown(signum, frame):
+def handle_shutdown(sig_name):
     """Handle shutdown signals gracefully"""
-    sig_name = signal.Signals(signum).name
     logger.info(f"Received {sig_name}, initiating shutdown...")
     if not _silent_mode:
         print(f"\nReceived {sig_name}, shutting down...")
@@ -39,9 +38,10 @@ async def main():
 
     _silent_mode = args.silent
 
-    # Register signal handlers for graceful shutdown
-    signal.signal(signal.SIGTERM, handle_shutdown)
-    signal.signal(signal.SIGHUP, handle_shutdown)
+    # Register signal handlers via the event loop for safe asyncio integration
+    loop = asyncio.get_running_loop()
+    loop.add_signal_handler(signal.SIGTERM, handle_shutdown, "SIGTERM")
+    loop.add_signal_handler(signal.SIGHUP, handle_shutdown, "SIGHUP")
 
     try:
         await monitor_servers(silent=args.silent)
