@@ -7,7 +7,7 @@ import asyncio
 from dotenv import load_dotenv
 from requests.exceptions import SSLError
 from telegram import Bot
-from typing import Optional, Tuple, Dict, Any
+from typing import NamedTuple, Optional, Tuple, Dict, Any
 import logging
 
 load_dotenv()
@@ -16,6 +16,21 @@ logger = logging.getLogger(__name__)
 class ConfigError(Exception):
     """Custom exception for configuration errors"""
     pass
+
+
+class Settings(NamedTuple):
+    """Immutable settings container — adding a field here is a compile-time-visible change."""
+    bot_token: Optional[str]
+    chat_id: Optional[str]
+    failure_threshold: int
+    recovery_threshold: int
+    check_interval: int
+    status_report_interval: int
+    report_only_on_down: bool
+
+    @property
+    def telegram_enabled(self) -> bool:
+        return self.bot_token is not None and self.chat_id is not None
 
 async def notify_error(message: str, chat_id: Optional[str] = None, bot_token: Optional[str] = None):
     """Send error notification via both logging and Telegram if credentials available"""
@@ -77,14 +92,14 @@ def read_settings():
     except ValueError as e:
         raise ConfigError(f"Invalid integer value in environment: {e}")
 
-    return (
-        bot_token,
-        chat_id,
-        failure_threshold,
-        recovery_threshold,
-        check_interval,
-        status_report_interval,
-        report_only_on_down
+    return Settings(
+        bot_token=bot_token,
+        chat_id=chat_id,
+        failure_threshold=failure_threshold,
+        recovery_threshold=recovery_threshold,
+        check_interval=check_interval,
+        status_report_interval=status_report_interval,
+        report_only_on_down=report_only_on_down,
     )
 
 def read_servers():
