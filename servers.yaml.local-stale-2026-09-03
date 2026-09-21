@@ -1,0 +1,121 @@
+- description: "VRRP Gateway (178.251.228.1)"
+  type: ping
+  target: "178.251.228.1"
+
+- description: "VRRP Gateway (178.18.148.1)"
+  type: ping
+  target: "178.18.148.1"
+
+- description: "VRRP Gateway (185.23.5.1)"
+  type: ping
+  target: "185.23.5.1"
+
+- description: "VRRP Gateway (2a09:bfc7::1)"
+  type: ping
+  target: "2a09:bfc7::1"
+
+- description: "core1.fra2.v6no.de (185.23.5.2)"
+  type: ping
+  target: "185.23.5.2"
+
+- description: "core2.fra2.v6no.de (185.23.5.3)"
+  type: ping
+  target: "185.23.5.3"
+
+- description: "core1.fra2.v6no.de (2a09:bfc7:1000::)"
+  type: ping
+  target: "2a09:bfc7:1000::"
+
+- description: "core2.fra2.v6no.de (2a09:bfc7:1000::1)"
+  type: ping
+  target: "2a09:bfc7:1000::1"
+
+- description: "NetApp SAN"
+  type: keyword
+  target: "http://45.157.234.25:5000"
+  keyword: "healthy"
+  expect_keyword: true
+
+- description: "rsc2.mgmt.fra2.bmtl.cc"
+  type: ping
+  target: "45.157.234.25"
+
+- description: "int1.fra2.v6node.com (185.23.5.21)"
+  type: ping
+  target: "185.23.5.21"
+
+- description: "int1.fra2.v6node.com - FC Rescue Uplink (84.200.6.166)"
+  type: ping
+  target: "84.200.6.166"
+
+- description: "pbs1.fra2.v6no.de (185.23.5.30)"
+  type: ping
+  target: "185.23.5.30"
+
+- description: "pve1.fra2.v6no.de (185.23.5.20)"
+  type: ping
+  target: "185.23.5.20"
+
+- description: "pve2.fra2.v6no.de (185.23.5.29)"
+  type: ping
+  target: "185.23.5.29"
+
+- description: "pve1.legacy.fra2.v6no.de (https)"
+  type: http
+  target: "https://pve1.legacy.fra2.v6no.de"
+
+- description: "pve2.legacy.fra2.v6no.de (https)"
+  type: http
+  target: "https://pve2.legacy.fra2.v6no.de"
+
+- description: "pve3.legacy.fra2.v6no.de (https)"
+  type: http
+  target: "https://pve3.legacy.fra2.v6no.de"
+
+- description: "pve5.legacy.fra2.v6no.de (https)"
+  type: http
+  target: "https://pve5.legacy.fra2.v6no.de"
+
+- description: "pve1.spo1.v6node.com"
+  type: ping
+  target: "194.110.175.2"
+
+- description: "pve2.spo1.v6node.com"
+  type: ping
+  target: "194.110.175.3"
+
+- description: "pve1.mep1.v6node.com"
+  type: ping
+  target: "pve1.mep1.v6node.com"
+
+- description: "pbs1.mep1.v6node.com"
+  type: ping
+  target: "pbs1.mep1.v6node.com"
+
+- description: "rproxy.fra2.v6no.de"
+  type: ping
+  target: "rproxy.fra2.v6no.de"
+
+- description: "v6node.com"
+  type: http
+  target: "https://v6node.com"
+
+- description: "cloud.v6node.com"
+  type: http
+  target: "https://cloud.v6node.com"
+
+- description: "support.v6node.com"
+  type: http
+  target: "https://support.v6node.com"
+
+- description: "netbox.v6no.de"
+  type: http
+  target: "https://netbox.v6no.de/"
+
+- description: "latency.v6node.com"
+  type: http
+  target: "https://latency.v6node.com"
+
+- description: "network.v6node.com"
+  type: http
+  target: "https://network.v6node.com"
