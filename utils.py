@@ -149,20 +149,33 @@ def format_timedelta(delta):
     else:
         return f"{seconds}s"
 
+# A check sends several probes and fails only if every one is lost. With a
+# single probe, a path with 15% random loss fails three checks in a row (the
+# failure threshold) several times a day and reports a host "down" that never
+# was. With 3 probes a check fails at 0.3% on that path; a real outage still
+# fails every probe. Packet loss itself is Checkmk's and SmokePing's job.
+PING_PROBES = 3
+PING_PROBE_INTERVAL_S = 0.5
+PING_PROBE_WAIT_S = 2
+
+
 def ping_check(target: str) -> Tuple[str, Optional[str], Optional[str]]:
-    """Perform ping check with better error handling"""
+    """Ping the target; Up if any probe is answered, Down if all are lost"""
     try:
         result = subprocess.run(
-            ['ping', '-c', '1', '-W', '5', target],
+            ['ping', '-c', str(PING_PROBES), '-i', str(PING_PROBE_INTERVAL_S),
+             '-W', str(PING_PROBE_WAIT_S), target],
             capture_output=True,
             text=True,
-            timeout=6
+            timeout=PING_PROBES * PING_PROBE_INTERVAL_S + PING_PROBE_WAIT_S + 5
         )
         if result.returncode == 0:
             latency = result.stdout.split('/')[-3].split('=')[-1].strip()
             return ("Up", latency, None)
         else:
-            return ("Down", None, result.stderr.strip())
+            # Lost probes leave stderr empty; name what happened instead
+            error = result.stderr.strip() or f"No reply to {PING_PROBES} probes"
+            return ("Down", None, error)
     except subprocess.TimeoutExpired:
         return ("Down", None, "Timeout")
     except Exception as e:

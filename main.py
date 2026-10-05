@@ -19,6 +19,9 @@ logging.basicConfig(
         logging.StreamHandler(sys.stderr),
     ]
 )
+# httpx logs every request URL at INFO, and a Telegram URL contains the bot
+# token, which would land in the journal and in /var/log/pymon.log.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Track if we're in silent mode for output decisions
